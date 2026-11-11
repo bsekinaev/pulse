@@ -44,6 +44,14 @@ def create_app(
     url = database_url or os.getenv("DATABASE_URL", "sqlite:///./pulse.sqlite3")
     engine, session_factory = make_session_factory(url)
     signer = URLSafeTimedSerializer(secret, salt="pulse-checkin-v1")
+    # За Caddy схема ASGI-запроса может быть http, хотя клиент использует HTTPS.
+    public_base_url = os.getenv("PUBLIC_BASE_URL") or (
+        "https://pulse.bsekinaev.ru" if production else ""
+    )
+    public_base_url = public_base_url.rstrip("/")
+    if production and not public_base_url.startswith("https://"):
+        raise RuntimeError("PUBLIC_BASE_URL должен использовать HTTPS")
+
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -160,7 +168,8 @@ def create_app(
         token = signer.dumps({"employee_id": employee.id, "day": 3})
         return templates.TemplateResponse(request, "employee.html", {
             "employee": employee, "checkin": checkin, "issues": issues,
-            "checkin_url": str(request.url_for("checkin_form", token=token)),
+            "checkin_url": (f"{public_base_url}/checkin/{token}" if public_base_url
+                            else str(request.url_for("checkin_form", token=token))),
             "day": max(1, (date.today() - employee.start_date).days + 1),
             "category_names": CATEGORY_NAMES, "csrf": ensure_csrf(request),
         })

@@ -171,3 +171,32 @@ def test_missing_resources_and_csrf_login(setup_app):
     login(client)
     assert client.get("/employees/999").status_code == 404
     assert client.get("/issues/999").status_code == 404
+
+def test_css_link_works_behind_https_proxy(setup_app):
+    """Стили загружаются по относительному пути, даже если ASGI видит HTTP."""
+    client, _ = setup_app
+    response = client.get("/login", headers={"host": "pulse.bsekinaev.ru"})
+    assert response.status_code == 200
+    assert 'href="/static/styles.css?v=2"' in response.text
+    assert "http://pulse.bsekinaev.ru/static" not in response.text
+    stylesheet = client.get("/static/styles.css")
+    assert stylesheet.status_code == 200
+    assert "text/css" in stylesheet.headers["content-type"]
+    assert ".metrics" in stylesheet.text
+
+
+def test_public_employee_link_is_https(tmp_path, monkeypatch):
+    """Персональная ссылка остаётся HTTPS за обратным прокси."""
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://pulse.bsekinaev.ru")
+    application = create_app(
+        database_url=f"sqlite:///{tmp_path / 'prod-test.sqlite3'}",
+        secret_key="a-secure-production-test-secret-more-than-32",
+        admin_password="password-for-production-test",
+    )
+    with TestClient(application, base_url="https://testserver") as client:
+        login(client)
+        employee = client.get("/employees/1")
+        assert employee.status_code == 200
+        assert 'value="https://pulse.bsekinaev.ru/checkin/' in employee.text
+        assert 'href="https://pulse.bsekinaev.ru/checkin/' in employee.text

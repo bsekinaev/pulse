@@ -10,3 +10,20 @@ button,.button-link{background:var(--accent);border:0;color:#fff;border-radius:9
 fieldset{border:0;border-bottom:1px solid var(--line);margin:0;padding:12px 0 20px}legend{font-weight:750;padding:0 0 12px}.question-number{color:var(--accent);margin-right:12px}.options{display:grid;grid-template-columns:1fr 1fr;gap:10px}.options label{display:flex;gap:9px;align-items:center;background:#f7fafc;border:1px solid var(--line);border-radius:9px;padding:11px;cursor:pointer}.options input{accent-color:var(--accent)}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.details{display:grid;grid-template-columns:140px 1fr;gap:10px;font-size:14px}.details dt{color:var(--muted)}.details dd{margin:0}.back{font-size:13px;color:var(--muted)}.link-input{font-size:12px!important}.quote{border-left:3px solid var(--accent);padding:14px;background:#f4f8f8;white-space:pre-wrap}.success-screen{text-align:center;max-width:580px;margin:50px auto;padding:50px 28px}.success-icon{margin:0 auto 20px;height:60px;width:60px;display:grid;place-items:center;background:var(--greenbg);color:var(--green);font-size:32px;border-radius:50%}
 @media(max-width:800px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-grid{grid-template-columns:1fr}.page-head{align-items:flex-start}}@media(max-width:500px){.topbar-inner{min-height:60px}.brand-suffix{display:none}.demo{font-size:8px;padding:4px 7px}.container{width:calc(100% - 24px)}main{padding-top:23px}.panel{padding:17px}.metric{padding:13px}.metric>strong{font-size:28px}.page-head{flex-wrap:wrap}.options{grid-template-columns:1fr}.details{grid-template-columns:110px 1fr}.section-head{align-items:flex-start}.section-head .count{display:none}}
+
+/* NOV-006: более выраженная визуальная иерархия для HR-панели. */
+body{background:radial-gradient(circle at 90% 0%,#e6f2f1 0,transparent 32%),var(--bg)}
+.page-head{background:linear-gradient(112deg,#153554 0%,#1d4c6f 62%,#137d77 125%);border-radius:17px;padding:30px 32px;color:#fff;box-shadow:0 12px 30px rgba(22,54,77,.12)}
+.page-head .eyebrow{color:#89e4d7}
+.page-head .muted{color:#cddfe8}
+.page-head h1{max-width:720px}
+.page-head .pill{align-self:flex-start}
+.metric{position:relative;overflow:hidden;transition:transform .16s ease,box-shadow .16s ease}
+.metric:before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)}
+.metric.alert:before{background:var(--red)}
+.metric:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(19,43,62,.07)}
+.issue-item{transition:background .14s ease}
+.action-link{display:inline-block;border-radius:7px;padding:4px 7px}
+.action-link:hover{background:#e6f5f2;text-decoration:none}
+button:focus-visible,a:focus-visible{outline:3px solid #75cfbf;outline-offset:2px}
+@media(max-width:500px){.page-head{padding:22px 19px}.metric:hover{transform:none}}
