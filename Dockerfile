@@ -6,6 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /srv/pulse
 
 COPY pyproject.toml ./
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
 COPY app/ ./app/
 COPY scripts/ ./scripts/
 
