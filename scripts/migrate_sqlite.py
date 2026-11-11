@@ -30,7 +30,7 @@ def _validate_existing_schema(inspector) -> None:
             raise ValueError(f"Несовместимые поля таблицы {name}")
 
         expected_foreign_keys = {
-            (tuple(fk.column_keys), fk.column.table.name)
+            (tuple(fk.column_keys), fk.elements[0].column.table.name)
             for fk in table.foreign_key_constraints
         }
         actual_foreign_keys = {
