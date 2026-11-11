@@ -189,8 +189,11 @@ def test_public_employee_link_is_https(tmp_path, monkeypatch):
     """Персональная ссылка остаётся HTTPS за обратным прокси."""
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("PUBLIC_BASE_URL", "https://pulse.bsekinaev.ru")
+    from scripts.migrate_sqlite import migrate_sqlite
+    database_url = f"sqlite:///{tmp_path / 'prod-test.sqlite3'}"
+    assert migrate_sqlite(database_url) == "upgrade"
     application = create_app(
-        database_url=f"sqlite:///{tmp_path / 'prod-test.sqlite3'}",
+        database_url=database_url,
         secret_key="a-secure-production-test-secret-more-than-32",
         admin_password="password-for-production-test",
     )
