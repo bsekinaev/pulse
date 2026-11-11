@@ -27,3 +27,18 @@ body{background:radial-gradient(circle at 90% 0%,#e6f2f1 0,transparent 32%),var(
 .action-link:hover{background:#e6f5f2;text-decoration:none}
 button:focus-visible,a:focus-visible{outline:3px solid #75cfbf;outline-offset:2px}
 @media(max-width:500px){.page-head{padding:22px 19px}.metric:hover{transform:none}}
+
+
+/* PULSE-011: фильтры сотрудников, сохранение адаптивности на 320 px. */
+.filters-panel{padding:20px 24px}
+.filters-panel h2{margin-bottom:14px}
+.filters-form{display:grid;grid-template-columns:minmax(160px,2fr) repeat(2,minmax(125px,1fr)) auto;gap:12px;align-items:end}
+.filters-form label{font-size:12px}
+.filters-form select{width:100%;min-height:47px;padding:10px 12px;border:1px solid #c6d4df;border-radius:9px;color:var(--text);background:#fff;font:inherit}
+.filters-form input{min-width:0}
+.filter-actions{display:flex;align-items:center;gap:12px}
+.filter-actions button{white-space:nowrap}
+.reset-link{font-size:13px;font-weight:650}
+.empty-results{padding:22px 12px;color:var(--muted);text-align:center}
+@media(max-width:900px){.filters-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:500px){.filters-panel{padding:17px}.filters-form{grid-template-columns:minmax(0,1fr)}.filter-actions{justify-content:space-between}.filters-form select{min-width:0}.filters-form label{min-width:0}}

@@ -12,8 +12,34 @@
   <article class="metric"><span>Требуют ответа</span><strong>{{ metrics.due_no_answer }}</strong><small>начиная с дня 3</small></article>
   <article class="metric"><span>Решено</span><strong>{{ metrics.resolved }}</strong><small>среднее время: {{ resolution_label }}</small></article>
 </section>
+<section class="panel filters-panel" aria-label="Поиск и фильтры сотрудников">
+  <h2>Найти сотрудника</h2>
+  <form method="get" action="/dashboard" class="filters-form" role="search">
+    <label>Имя или должность
+      <input type="search" name="q" maxlength="80" value="{{ query }}" placeholder="Например, кладовщик">
+    </label>
+    <label>Подразделение
+      <select name="department">
+        <option value="">Все подразделения</option>
+        {% for unit in departments %}
+        <option value="{{ unit }}"{% if unit == department %} selected{% endif %}>{{ unit }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Состояние
+      <select name="status">
+        <option value="all"{% if selected_status == 'all' %} selected{% endif %}>Все состояния</option>
+        <option value="needs_help"{% if selected_status == 'needs_help' %} selected{% endif %}>Нужна помощь</option>
+        <option value="awaiting"{% if selected_status == 'awaiting' %} selected{% endif %}>Требуется ответ</option>
+        <option value="answered"{% if selected_status == 'answered' %} selected{% endif %}>Анкета получена</option>
+        <option value="not_due"{% if selected_status == 'not_due' %} selected{% endif %}>До третьего дня</option>
+      </select>
+    </label>
+    <div class="filter-actions"><button type="submit">Найти</button><a href="/dashboard" class="reset-link">Сбросить</a></div>
+  </form>
+</section>
 <section class="panel">
-  <div class="section-head"><div><h2>Новички</h2><p class="muted">Сначала сотрудники, которым нужна помощь</p></div><span class="count">{{ people|length }} человек</span></div>
+  <div class="section-head"><div><h2>Новички</h2><p class="muted">Сначала сотрудники, которым нужна помощь</p></div><span class="count">Показано {{ people|length }} из {{ total_people }}</span></div>
   <div class="table-wrap"><table>
     <thead><tr><th>Сотрудник</th><th>Подразделение</th><th>День</th><th>Состояние</th><th></th></tr></thead>
     <tbody>{% for person in people %}
@@ -25,6 +51,7 @@
       {% elif (today - person.start_date).days + 1 < 3 %}<span class="pill muted-pill">Ожидаем день 3</span>
       {% else %}<span class="pill muted-pill">Требуется ответ</span>{% endif %}</td>
       <td><a class="action-link" href="/employees/{{ person.id }}">Открыть →</a></td></tr>
+    {% else %}<tr><td colspan="5" class="empty-results">Сотрудники по выбранным условиям не найдены. <a href="/dashboard">Сбросить фильтры</a></td></tr>
     {% endfor %}</tbody>
   </table></div>
 </section>

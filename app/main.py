@@ -22,6 +22,7 @@ from app.services.onboarding import (
     dashboard_counts, resolve_issue, submit_checkin,
 )
 from scripts.seed_demo import seed_demo
+from app.services.filters import filter_employees
 from app.services.metrics import (
     format_minsk, is_issue_overdue, minsk_today,
     operational_metrics, resolution_label,
@@ -203,12 +204,25 @@ def create_app(
         for issue in issues:
             open_counts[issue.employee_id] = open_counts.get(issue.employee_id, 0) + 1
         people.sort(key=lambda person: (-open_counts.get(person.id, 0), person.name))
+        today = minsk_today()
+        departments = sorted({person.department for person in people})
+        query = request.query_params.get("q", "").strip()[:80]
+        department = request.query_params.get("department", "").strip()[:40]
+        state = request.query_params.get("status", "all")
+        if state not in ("all", "needs_help", "answered", "awaiting", "not_due"):
+            state = "all"
+        filtered = filter_employees(
+            people, checkins, open_counts, today,
+            query=query, department=department, state=state,
+        )
         metrics = operational_metrics(db)
         return templates.TemplateResponse(request, "dashboard.html", {
-            "people": people, "checkins": checkins, "open_counts": open_counts,
+            "people": filtered, "checkins": checkins, "open_counts": open_counts,
             "issues": issues, "counts": dashboard_counts(db), "csrf": ensure_csrf(request),
-            "today": minsk_today(), "category_names": CATEGORY_NAMES,
-            "metrics": metrics,
+            "today": today, "category_names": CATEGORY_NAMES,
+            "metrics": metrics, "total_people": len(people),
+            "departments": departments, "query": query, "department": department,
+            "selected_status": state,
             "resolution_label": resolution_label(metrics["average_resolution_minutes"]),
         })
 
