@@ -79,7 +79,12 @@ def blocked_seconds(db: Session, key: str, now: datetime | None = None) -> int:
 
 def register_failed_login(db: Session, key: str) -> None:
     """Сохраняет неудачный вход, не записывая пароль и исходный IP."""
-    db.add(LoginFailure(source_hash=key, attempted_at=_now()))
+    now = _now()
+    # Удаляем старые записи, чтобы журнал не рос бесконечно.
+    db.execute(delete(LoginFailure).where(
+        LoginFailure.attempted_at < now - LOGIN_WINDOW * 2
+    ))
+    db.add(LoginFailure(source_hash=key, attempted_at=now))
     db.commit()
 
 
