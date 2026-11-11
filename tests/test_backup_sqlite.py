@@ -3,6 +3,7 @@
 import os
 import sqlite3
 import stat
+from pathlib import Path
 
 import pytest
 
@@ -38,7 +39,10 @@ def test_backup_is_consistent_and_private(tmp_path):
     result = backup_sqlite(source, destination)
     assert result == destination
     assert source.exists()
-    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
+    # На Windows chmod управляет только read-only, но не NTFS ACL.
+    # Защита доступа определяется закрытым каталогом профиля пользователя.
+    if os.name != "nt":
+        assert stat.S_IMODE(destination.stat().st_mode) == 0o600
 
     with sqlite3.connect(destination) as db:
         assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -86,3 +90,26 @@ def test_backup_rejects_missing_source_and_same_path(tmp_path):
     create_pulse_database(source)
     with pytest.raises(ValueError, match="различаться"):
         backup_sqlite(source, source)
+
+
+def test_backup_fsync_uses_writable_handle(tmp_path, monkeypatch):
+    """Файл для fsync открывается с записью: это обязательно на Windows."""
+    source = tmp_path / "live.sqlite3"
+    destination = tmp_path / "backup.sqlite3"
+    create_pulse_database(source)
+
+    actual_open = Path.open
+    opened_modes = []
+
+    def recording_open(path, mode="r", *args, **kwargs):
+        """Запоминает режим открытия временного файла копии."""
+        if path.suffix == ".partial":
+            opened_modes.append(mode)
+        return actual_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", recording_open)
+    backup_sqlite(source, destination)
+
+    assert "r+b" in opened_modes
+    assert destination.exists()
+    assert not list(tmp_path.glob("*.partial"))

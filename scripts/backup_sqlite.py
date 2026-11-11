@@ -59,8 +59,10 @@ def backup_sqlite(source: Path, destination: Path) -> Path:
                 if not REQUIRED_TABLES <= tables:
                     raise RuntimeError("Источник не содержит обязательных таблиц ПУЛЬС")
 
+        # На Windows fsync требует дескриптор, открытый для записи.
+        # Данные уже сохранены SQLite: здесь ничего не перезаписываем.
         os.chmod(temporary, 0o600)
-        with temporary.open("rb") as handle:
+        with temporary.open("r+b") as handle:
             os.fsync(handle.fileno())
 
         # В отличие от os.replace(), os.link() не затирает готовую копию.
