@@ -236,12 +236,15 @@ def create_app(
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
         checkin = db.scalar(select(CheckIn).where(CheckIn.employee_id == employee_id))
         issues = db.scalars(select(Issue).where(Issue.employee_id == employee_id)).all()
+        issues.sort(key=lambda item: item.created_at, reverse=True)
         token = signer.dumps({"employee_id": employee.id, "day": 3})
         return templates.TemplateResponse(request, "employee.html", {
             "employee": employee, "checkin": checkin, "issues": issues,
             "checkin_url": (f"{public_base_url}/checkin/{token}" if public_base_url
                             else str(request.url_for("checkin_form", token=token))),
             "day": max(1, (minsk_today() - employee.start_date).days + 1),
+            "open_issues": sum(1 for item in issues if item.status == "open"),
+            "resolved_issues": sum(1 for item in issues if item.status == "resolved"),
             "category_names": CATEGORY_NAMES, "csrf": ensure_csrf(request),
         })
 
