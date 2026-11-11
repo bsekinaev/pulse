@@ -53,8 +53,12 @@ def test_existing_v010_schema_stamped_without_data_loss(tmp_path):
     with sqlite3.connect(path) as db:
         assert db.execute("SELECT name FROM employees").fetchone() == ("Алексей",)
         assert db.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            BASE_REVISION,
+            "20261111_0002",
         )
+        assert db.execute(
+            "SELECT count(*) FROM sqlite_master "
+            "WHERE name IN ('login_failures', 'admin_sessions')"
+        ).fetchone() == (2,)
 
 
 def test_incompatible_existing_schema_rejected(tmp_path):
