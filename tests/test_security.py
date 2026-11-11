@@ -12,6 +12,7 @@ from app.main import create_app
 from app.models import AdminSession, LoginFailure
 from app.security import (
     LOGIN_LIMIT, blocked_seconds, client_source, source_digest,
+    parse_trusted_proxy_hosts,
 )
 
 
@@ -159,10 +160,13 @@ def test_proxy_header_accepted_only_from_explicit_subnet():
         headers={"x-forwarded-for": "203.0.113.21, 172.22.0.3"},
     )
     assert client_source(request) == "172.22.0.3"
-    assert client_source(request, ("172.22.0.0/24",)) == "203.0.113.21"
-    assert client_source(request, ("172.23.0.0/24",)) == "172.22.0.3"
+    # Цепочку заголовков не принимаем даже от доверенного peer.
+    assert client_source(request, ("172.22.0.3/32",)) == "172.22.0.3"
+    request.headers = {"x-forwarded-for": "203.0.113.21"}
+    assert client_source(request, ("172.22.0.3/32",)) == "203.0.113.21"
+    assert client_source(request, ("172.22.0.4/32",)) == "172.22.0.3"
     request.headers = {"x-forwarded-for": "not-an-ip"}
-    assert client_source(request, ("172.22.0.0/24",)) == "172.22.0.3"
+    assert client_source(request, ("172.22.0.3/32",)) == "172.22.0.3"
 
 
 def test_security_headers_and_no_inline_handlers(secure_app):
@@ -182,3 +186,41 @@ def test_security_headers_and_no_inline_handlers(secure_app):
     assert employee.status_code == 200
     assert 'onclick=' not in employee.text
     assert employee.headers["cache-control"] == "no-store"
+
+
+def test_trusted_proxy_configuration_rejects_wide_networks(monkeypatch, tmp_path):
+    """Защита не доверяет всей общей Docker-сети и внешнему интернету."""
+    assert parse_trusted_proxy_hosts("172.20.0.3/32") == ("172.20.0.3/32",)
+    assert parse_trusted_proxy_hosts("172.20.0.3") == ("172.20.0.3/32",)
+    assert parse_trusted_proxy_hosts("") == ()
+    for network in ("172.20.0.0/16", "0.0.0.0/0", "::/0"):
+        with pytest.raises(ValueError, match="только /32 или /128"):
+            parse_trusted_proxy_hosts(network)
+
+        monkeypatch.setenv("PULSE_TRUSTED_PROXY_CIDRS", network)
+        with pytest.raises(ValueError):
+            create_app(
+                database_url=f"sqlite:///{tmp_path / 'refused.sqlite3'}",
+                secret_key="secret-for-tests-only",
+                admin_password="password-for-tests",
+            )
+    monkeypatch.delenv("PULSE_TRUSTED_PROXY_CIDRS", raising=False)
+
+
+def test_backend_does_not_trust_proxy_headers_implicitly():
+    """Запущенный Uvicorn не подменяет реальный peer заголовком клиента."""
+    from pathlib import Path
+    dockerfile = Path(__file__).resolve().parents[1] / "Dockerfile"
+    assert "--no-proxy-headers" in dockerfile.read_text(encoding="utf-8")
+
+
+def test_untrusted_neighbor_cannot_rotate_forwarded_for_to_bypass_limit():
+    """Подмена XFF от соседнего контейнера не меняет ключ блокировки."""
+    request = SimpleNamespace(
+        client=SimpleNamespace(host="172.20.0.4"),
+        headers={"x-forwarded-for": "198.51.100.1"},
+    )
+    allowed_proxy = ("172.20.0.3/32",)
+    assert client_source(request, allowed_proxy) == "172.20.0.4"
+    request.headers = {"x-forwarded-for": "203.0.113.25"}
+    assert client_source(request, allowed_proxy) == "172.20.0.4"

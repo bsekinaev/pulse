@@ -29,6 +29,7 @@ from app.services.metrics import (
 from app.security import (
     blocked_seconds, client_source, create_admin_session, register_failed_login,
     reset_failed_logins, revoke_admin_session, source_digest, valid_admin_session,
+    parse_trusted_proxy_hosts,
 )
 
 ROOT = Path(__file__).resolve().parent
@@ -47,14 +48,10 @@ def create_app(
     secret = secret_key or os.getenv("APP_SECRET_KEY") or "local-dev-secret-not-for-production"
     password = admin_password or os.getenv("ADMIN_PASSWORD") or "local-dev-admin"
     username = os.getenv("ADMIN_USERNAME", "admin")
-    trusted_proxies = tuple(
-        item.strip() for item in os.getenv("PULSE_TRUSTED_PROXY_CIDRS", "").split(",")
-        if item.strip()
+    # Доверяем только конкретному Caddy, а не всей общей Docker-подсети.
+    trusted_proxies = parse_trusted_proxy_hosts(
+        os.getenv("PULSE_TRUSTED_PROXY_CIDRS", "")
     )
-    # Ошибку конфигурации доверенных прокси выявляем до старта приложения.
-    import ipaddress
-    for cidr in trusted_proxies:
-        ipaddress.ip_network(cidr, strict=False)
     if production and (len(secret) < 32 or len(password) < 12):
         raise RuntimeError("Для production задайте APP_SECRET_KEY (32+) и ADMIN_PASSWORD (12+)")
 

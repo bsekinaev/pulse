@@ -33,7 +33,7 @@ def client_source(request, trusted_proxy_cidrs: tuple[str, ...] = ()) -> str:
     """Определяет адрес источника, не доверяя произвольному X-Forwarded-For.
 
     Адрес из заголовка учитывается только тогда, когда непосредственный peer
-    принадлежит явно разрешённой подсети прокси. Без настройки используется
+    совпадает с явно разрешённым адресом прокси. Без настройки используется
     адрес peer; за Caddy это может быть общий адрес самого прокси.
     """
     peer = request.client.host if request.client else "unknown"
@@ -46,13 +46,34 @@ def client_source(request, trusted_proxy_cidrs: tuple[str, ...] = ()) -> str:
         peer_ip in ipaddress.ip_network(cidr, strict=False)
         for cidr in trusted_proxy_cidrs
     )
-    if trusted:
-        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        try:
-            return str(ipaddress.ip_address(forwarded))
-        except ValueError:
-            pass
-    return str(peer_ip)
+    if not trusted:
+        return str(peer_ip)
+
+    # У прямого Caddy нет цепочки доверенных прокси: принимаем ровно один IP.
+    # Запрос с подставленной цепочкой адресов не обходит лимит входа.
+    forwarded = request.headers.get("x-forwarded-for", "").strip()
+    if not forwarded or "," in forwarded:
+        return str(peer_ip)
+    try:
+        return str(ipaddress.ip_address(forwarded))
+    except ValueError:
+        return str(peer_ip)
+
+
+def parse_trusted_proxy_hosts(value: str) -> tuple[str, ...]:
+    """Разрешает только отдельные IP доверенных прокси, но не целые подсети."""
+    hosts = []
+    for entry in value.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        network = ipaddress.ip_network(entry, strict=False)
+        if network.prefixlen != network.max_prefixlen:
+            raise ValueError(
+                "PULSE_TRUSTED_PROXY_CIDRS допускает только /32 или /128"
+            )
+        hosts.append(str(network))
+    return tuple(hosts)
 
 
 def source_digest(source: str, secret: str) -> str:
