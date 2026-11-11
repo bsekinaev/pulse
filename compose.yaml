@@ -11,6 +11,8 @@ services:
       DATABASE_URL: sqlite:////var/lib/pulse/pulse.sqlite3
     ports:
       - "127.0.0.1:18120:8000"
+    networks:
+      - public_edge
     volumes:
       - pulse_data:/var/lib/pulse
     read_only: true
@@ -29,3 +31,10 @@ services:
 
 volumes:
   pulse_data:
+
+# Сеть создаётся отдельно и не удаляется вместе с Compose-проектом ПУЛЬС.
+# Обратный прокси должен подключаться к ней декларативно в СВОЁМ Compose.
+networks:
+  public_edge:
+    external: true
+    name: pulse_public_edge

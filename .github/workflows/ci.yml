@@ -40,3 +40,54 @@ jobs:
           done
           docker logs pulse-ci
           exit 1
+
+  compose:
+    name: Compose / внешняя сеть
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Проверить синтаксис preflight
+        run: bash -n deploy/preflight.sh
+      - name: Создать тестовую сеть и секреты
+        run: |
+          docker network create pulse_public_edge
+          cat > .env <<'ENV'
+          APP_SECRET_KEY=ci-demo-secret-that-is-longer-than-thirty-two-characters
+          ADMIN_USERNAME=admin
+          ADMIN_PASSWORD=ci-only-demo-password-not-for-real-use
+          ENV
+      - name: Проверить Compose и запустить приложение
+        run: |
+          docker compose config --quiet
+          docker compose up -d --build
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18120/health; then
+              echo "COMPOSE_HEALTH=PASS"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs --tail 80 pulse
+          exit 1
+      - name: Проверить DNS внутри сети и recreate
+        run: |
+          docker run --rm --network pulse_public_edge --entrypoint python pulse:0.1.0 -c             "from urllib.request import urlopen; assert urlopen('http://pulse-demo:8000/health', timeout=5).status == 200"
+          docker compose up -d --force-recreate pulse
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18120/health >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              docker compose logs --tail 80 pulse
+              exit 1
+            fi
+            sleep 2
+          done
+          docker run --rm --network pulse_public_edge --entrypoint python pulse:0.1.0 -c             "from urllib.request import urlopen; assert urlopen('http://pulse-demo:8000/health', timeout=5).status == 200"
+          echo "COMPOSE_RECREATE_EDGE=PASS"
+      - name: Удалить временные ресурсы
+        if: always()
+        run: |
+          docker compose down || true
+          docker network rm pulse_public_edge || true
+          rm -f .env
