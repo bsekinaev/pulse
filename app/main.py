@@ -22,6 +22,10 @@ from app.services.onboarding import (
     dashboard_counts, resolve_issue, submit_checkin,
 )
 from scripts.seed_demo import seed_demo
+from app.services.metrics import (
+    format_minsk, is_issue_overdue, minsk_today,
+    operational_metrics, resolution_label,
+)
 from app.security import (
     blocked_seconds, client_source, create_admin_session, register_failed_login,
     reset_failed_logins, revoke_admin_session, source_digest, valid_admin_session,
@@ -29,6 +33,7 @@ from app.security import (
 
 ROOT = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
+templates.env.filters["minsk_datetime"] = format_minsk
 
 
 def create_app(
@@ -201,10 +206,13 @@ def create_app(
         for issue in issues:
             open_counts[issue.employee_id] = open_counts.get(issue.employee_id, 0) + 1
         people.sort(key=lambda person: (-open_counts.get(person.id, 0), person.name))
+        metrics = operational_metrics(db)
         return templates.TemplateResponse(request, "dashboard.html", {
             "people": people, "checkins": checkins, "open_counts": open_counts,
             "issues": issues, "counts": dashboard_counts(db), "csrf": ensure_csrf(request),
-            "today": date.today(), "category_names": CATEGORY_NAMES,
+            "today": minsk_today(), "category_names": CATEGORY_NAMES,
+            "metrics": metrics,
+            "resolution_label": resolution_label(metrics["average_resolution_minutes"]),
         })
 
     @application.get("/employees/{employee_id}")
@@ -222,7 +230,7 @@ def create_app(
             "employee": employee, "checkin": checkin, "issues": issues,
             "checkin_url": (f"{public_base_url}/checkin/{token}" if public_base_url
                             else str(request.url_for("checkin_form", token=token))),
-            "day": max(1, (date.today() - employee.start_date).days + 1),
+            "day": max(1, (minsk_today() - employee.start_date).days + 1),
             "category_names": CATEGORY_NAMES, "csrf": ensure_csrf(request),
         })
 
@@ -277,6 +285,7 @@ def create_app(
         return templates.TemplateResponse(request, "issue.html", {
             "issue": issue, "category_names": CATEGORY_NAMES,
             "csrf": ensure_csrf(request), "error": None,
+            "overdue": is_issue_overdue(issue),
         })
 
     @application.post("/issues/{issue_id}/resolve")
@@ -295,6 +304,7 @@ def create_app(
             return templates.TemplateResponse(request, "issue.html", {
                 "issue": issue, "category_names": CATEGORY_NAMES,
                 "csrf": ensure_csrf(request), "error": str(exc),
+                "overdue": is_issue_overdue(issue),
             }, status_code=409 if isinstance(exc, AlreadyResolved) else 422)
         return RedirectResponse(f"/issues/{issue_id}", status_code=303)
 
