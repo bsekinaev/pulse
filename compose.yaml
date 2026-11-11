@@ -1,0 +1,31 @@
+services:
+  pulse:
+    build: .
+    image: pulse:0.1.0
+    container_name: pulse-demo
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: sqlite:////var/lib/pulse/pulse.sqlite3
+    ports:
+      - "127.0.0.1:18120:8000"
+    volumes:
+      - pulse_data:/var/lib/pulse
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  pulse_data:
