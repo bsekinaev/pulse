@@ -1,7 +1,12 @@
-# Добавьте отдельный блок в действующую конфигурацию Caddy.
-# Сначала выполните caddy validate, затем reload.
-# Не меняйте существующий блок основного сайта bsekinaev.ru.
+# Вариант A: Caddy на хосте
 pulse.bsekinaev.ru {
     encode zstd gzip
     reverse_proxy 127.0.0.1:18120
 }
+
+# Вариант B: Caddy в Docker — использовать вместо A, только если
+# Caddy и контейнер pulse-demo подключены к одной Docker-сети.
+# pulse.bsekinaev.ru {
+#     encode zstd gzip
+#     reverse_proxy pulse-demo:8000
+# }
