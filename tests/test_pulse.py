@@ -195,7 +195,13 @@ def test_public_employee_link_is_https(tmp_path, monkeypatch):
         admin_password="password-for-production-test",
     )
     with TestClient(application, base_url="https://testserver") as client:
-        login(client)
+        page = client.get("/login")
+        csrf = re.search(r'name="csrf" value="([^"]+)"', page.text).group(1)
+        signed_in = client.post("/login", data={
+            "username": "admin", "password": "password-for-production-test",
+            "csrf": csrf,
+        }, follow_redirects=False)
+        assert signed_in.status_code == 303
         employee = client.get("/employees/1")
         assert employee.status_code == 200
         assert 'value="https://pulse.bsekinaev.ru/checkin/' in employee.text
