@@ -69,6 +69,14 @@ def migrate_sqlite(database_url: str) -> str:
         names = set(inspector.get_table_names())
         if names and "alembic_version" not in names:
             _validate_existing_schema(inspector)
+            # Не маркируем базу как совместимую, пока данные нарушают связи.
+            with engine.connect() as connection:
+                integrity = connection.exec_driver_sql("PRAGMA integrity_check").scalar()
+                if integrity != "ok":
+                    raise ValueError("Повреждена целостность существующей SQLite-базы")
+                foreign_keys = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+                if foreign_keys:
+                    raise ValueError("Найдены нарушения внешних ключей в SQLite-базе")
             action = "stamp_existing"
         else:
             action = "upgrade"

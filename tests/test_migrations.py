@@ -5,10 +5,11 @@ from datetime import date
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db import Base
-from app.models import Employee
+from app.db import Base, make_session_factory
+from app.models import CheckIn, Employee
 from scripts.migrate_sqlite import BASE_REVISION, migrate_sqlite
 
 
@@ -82,3 +83,40 @@ def test_second_migration_keeps_data(tmp_path):
     assert migrate_sqlite(url) == "upgrade"
     with sqlite3.connect(path) as db:
         assert db.execute("SELECT count(*) FROM employees").fetchone() == (1,)
+
+
+def test_application_rejects_orphan_checkin(tmp_path):
+    """Каждое подключение приложения проверяет внешние ключи SQLite."""
+    path = tmp_path / "protected.sqlite3"
+    engine, session_factory = make_session_factory(f"sqlite:///{path}")
+    try:
+        Base.metadata.create_all(engine)
+        with session_factory() as db:
+            db.add(CheckIn(employee_id=9999, checkpoint_day=3, answers_json="{}"))
+            with pytest.raises(IntegrityError):
+                db.commit()
+            db.rollback()
+    finally:
+        engine.dispose()
+
+
+def test_existing_orphan_data_refused_before_alembic_stamp(tmp_path):
+    """Alembic не маркирует старую базу с повреждёнными связями."""
+    path = tmp_path / "orphan.sqlite3"
+    url = f"sqlite:///{path}"
+    engine = create_engine(url)
+    Base.metadata.create_all(engine)
+    engine.dispose()
+    # Имитируем существующее подключение v0.1.0 без PRAGMA foreign_keys.
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "INSERT INTO checkins "
+            "(employee_id, checkpoint_day, answers_json, comment, submitted_at) "
+            "VALUES (9999, 3, '{}', '', '2026-11-11 12:00:00')"
+        )
+    with pytest.raises(ValueError, match="внешних ключей"):
+        migrate_sqlite(url)
+    with sqlite3.connect(path) as db:
+        assert db.execute(
+            "SELECT count(*) FROM sqlite_master WHERE name = 'alembic_version'"
+        ).fetchone()[0] == 0
