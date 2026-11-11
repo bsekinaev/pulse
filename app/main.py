@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.db import Base, make_session_factory
+from app.schema import require_current_schema
 from app.models import CheckIn, Employee, Issue
 from app.services.onboarding import (
     CATEGORY_NAMES, InvalidAnswers, AlreadyResolved,
@@ -70,7 +71,11 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        Base.metadata.create_all(engine)
+        if production:
+            # Новая схема допускается только после контролируемого Alembic upgrade.
+            require_current_schema(engine)
+        else:
+            Base.metadata.create_all(engine)
         if seed:
             with session_factory() as db:
                 seed_demo(db)
