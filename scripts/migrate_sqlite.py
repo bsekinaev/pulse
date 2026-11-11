@@ -14,16 +14,19 @@ from app import models  # ORM-таблицы должны быть зареги�
 
 ROOT = Path(__file__).resolve().parent.parent
 BASE_REVISION = "20261111_0001"
+# Снимок исходной схемы не должен меняться при добавлении таблиц v0.2.0.
+BASE_TABLE_NAMES = {"employees", "checkins", "issues"}
 
 
 def _validate_existing_schema(inspector) -> None:
     """Отказывает в маркировке, если структура не соответствует v0.1.0."""
-    expected = set(Base.metadata.tables)
+    expected = BASE_TABLE_NAMES
     actual = set(inspector.get_table_names()) - {"alembic_version"}
     if actual != expected:
         raise ValueError(f"Несовместимый набор таблиц: {sorted(actual)}")
 
-    for name, table in Base.metadata.tables.items():
+    for name in sorted(BASE_TABLE_NAMES):
+        table = Base.metadata.tables[name]
         expected_columns = {column.name for column in table.columns}
         actual_columns = {column["name"] for column in inspector.get_columns(name)}
         if actual_columns != expected_columns:

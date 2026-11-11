@@ -9,7 +9,7 @@
     <dt>Наставник</dt><dd>{{ employee.mentor_name }}</dd>
     <dt>Обратная связь</dt><dd>{% if checkin %}<span class="pill success">Получена</span>{% else %}<span class="pill muted-pill">Ожидается</span>{% endif %}</dd></dl>
     <h3>Персональная ссылка</h3><p class="muted">Передайте её только демонстрационному сотруднику. Ссылка действует 7 дней.</p>
-    <input class="link-input" readonly aria-label="Ссылка на анкету" value="{{ checkin_url }}" onclick="this.select()">
+    <input class="link-input" readonly aria-label="Ссылка на анкету" value="{{ checkin_url }}">
     <a class="button-link" href="{{ checkin_url }}" target="_blank" rel="noopener">Открыть анкету ↗</a>
   </section>
   <section class="panel"><h2>История проблем</h2>

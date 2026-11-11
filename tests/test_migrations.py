@@ -27,7 +27,7 @@ def test_new_database_created_with_alembic(tmp_path):
         }
         assert {"employees", "checkins", "issues", "alembic_version"} <= names
         assert db.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            BASE_REVISION,
+            "20261111_0002",
         )
 
 
@@ -36,7 +36,10 @@ def test_existing_v010_schema_stamped_without_data_loss(tmp_path):
     path = tmp_path / "existing.sqlite3"
     url = f"sqlite:///{path}"
     engine = create_engine(url)
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(
+        engine,
+        tables=[Base.metadata.tables[name] for name in ("employees", "checkins", "issues")],
+    )
     with Session(engine) as db:
         db.add(Employee(
             demo_key="test", name="Алексей", department="Склад",
@@ -105,7 +108,10 @@ def test_existing_orphan_data_refused_before_alembic_stamp(tmp_path):
     path = tmp_path / "orphan.sqlite3"
     url = f"sqlite:///{path}"
     engine = create_engine(url)
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(
+        engine,
+        tables=[Base.metadata.tables[name] for name in ("employees", "checkins", "issues")],
+    )
     engine.dispose()
     # Имитируем существующее подключение v0.1.0 без PRAGMA foreign_keys.
     with sqlite3.connect(path) as db:
