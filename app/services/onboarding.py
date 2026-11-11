@@ -2,7 +2,7 @@
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -73,12 +73,25 @@ def resolve_issue(db: Session, issue: Issue, resolution: str) -> Issue:
     resolution = resolution.strip()
     if not 5 <= len(resolution) <= 500:
         raise ValueError("Укажите результат устранения: от 5 до 500 символов")
-    if issue.status == "resolved":
-        raise AlreadyResolved("Проблема уже закрыта")
-    issue.status = "resolved"
-    issue.resolved_at = datetime.now(timezone.utc)
-    issue.resolution = resolution
-    db.commit()
+    # Условное обновление атомарно: второе закрытие не перепишет первое,
+    # даже если оба администратора загрузили открытую проблему заранее.
+    try:
+        result = db.execute(
+            update(Issue)
+            .where(Issue.id == issue.id, Issue.status == "open")
+            .values(
+                status="resolved",
+                resolved_at=datetime.now(timezone.utc),
+                resolution=resolution,
+            )
+        )
+        if result.rowcount != 1:
+            db.rollback()
+            raise AlreadyResolved("Проблема уже закрыта")
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(issue)
     return issue
 

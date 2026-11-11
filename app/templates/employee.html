@@ -9,13 +9,19 @@
     <dt>Наставник</dt><dd>{{ employee.mentor_name }}</dd>
     <dt>Обратная связь</dt><dd>{% if checkin %}<span class="pill success">Получена</span>{% else %}<span class="pill muted-pill">Ожидается</span>{% endif %}</dd></dl>
     <h3>Персональная ссылка</h3><p class="muted">Передайте её только демонстрационному сотруднику. Ссылка действует 7 дней.</p>
-    <input class="link-input" readonly aria-label="Ссылка на анкету" value="{{ checkin_url }}" onclick="this.select()">
-    <a class="button-link" href="{{ checkin_url }}" target="_blank" rel="noopener">Открыть анкету ↗</a>
+    <input id="checkin-url" class="link-input" readonly aria-label="Ссылка на анкету" value="{{ checkin_url }}">
+    <div class="link-actions">
+      <button type="button" id="copy-checkin-link" aria-describedby="copy-result">Скопировать ссылку</button>
+      <a class="button-link" href="{{ checkin_url }}" target="_blank" rel="noopener noreferrer">Открыть анкету ↗</a>
+    </div>
+    <p id="copy-result" class="fine" role="status" aria-live="polite"></p>
+    {% if checkin %}<p class="fine">Анкета уже заполнена: ссылка ведёт на страницу подтверждения.</p>{% endif %}
+    <script src="/static/clipboard.js" defer></script>
   </section>
   <section class="panel"><h2>История проблем</h2>
-    {% if issues %}{% for issue in issues %}
+    {% if issues %}<p class="muted fine">Открыто: {{ open_issues }} · Закрыто: {{ resolved_issues }}</p>{% for issue in issues %}
       <a class="history-item" href="/issues/{{ issue.id }}"><span><strong>{{ category_names[issue.category] }}</strong>
-        <small>{{ issue.owner_name }}</small></span>
+        <small>Ответственный: {{ issue.owner_name }} · {{ issue.created_at|minsk_datetime }} (Минск)</small></span>
         <span class="pill {% if issue.status == 'resolved' %}success{% else %}danger{% endif %}">{{ 'Решено' if issue.status == 'resolved' else 'Открыта' }}</span>
       </a>
     {% endfor %}{% else %}<p class="empty">Проблемы не зарегистрированы.</p>{% endif %}

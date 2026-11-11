@@ -3,19 +3,21 @@
 {% block content %}
 <p><a class="back" href="/dashboard">← К панели</a></p>
 <div class="page-head"><div><span class="eyebrow">Проблема №{{ issue.id }}</span><h1>{{ category_names[issue.category] }}</h1><p class="muted">{{ issue.employee.name }} · {{ issue.employee.department }}</p></div>
-<span class="pill {% if issue.status == 'resolved' %}success{% else %}danger{% endif %}">{{ 'Решено' if issue.status == 'resolved' else 'Открыта' }}</span></div>
+<span class="pill {% if issue.status == 'resolved' %}success{% else %}danger{% endif %}">{{ 'Решено' if issue.status == 'resolved' else ('Просрочена' if overdue else 'Открыта') }}</span></div>
 <div class="detail-grid">
   <section class="panel"><h2>Контекст обращения</h2>
     <dl class="details"><dt>Сотрудник</dt><dd>{{ issue.employee.name }}</dd>
     <dt>Подразделение</dt><dd>{{ issue.employee.department }}</dd>
     <dt>Ответственный</dt><dd>{{ issue.owner_name }}</dd>
-    <dt>Создана</dt><dd>{{ issue.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</dd></dl>
+    <dt>Создана</dt><dd>{{ issue.created_at|minsk_datetime }} · Минск</dd>
+    <dt>Регламент</dt><dd>Решение в течение 24 часов</dd>
+    <dt>Статус SLA</dt><dd>{% if issue.status == 'resolved' %}Закрыта{% elif overdue %}<span class="pill danger">Просрочена</span>{% else %}<span class="pill blue">В пределах срока</span>{% endif %}</dd></dl>
     <h3>Комментарий новичка</h3><div class="quote">{{ issue.checkin.comment or 'Дополнительный комментарий отсутствует.' }}</div>
   </section>
   <section class="panel"><h2>Результат работы</h2>
     {% if issue.status == 'resolved' %}
       <div class="notice success-notice">Проблема закрыта</div>
-      <p>{{ issue.resolution }}</p><p class="muted">Закрыта: {{ issue.resolved_at.strftime('%d.%m.%Y %H:%M') }} UTC</p>
+      <p>{{ issue.resolution }}</p><p class="muted">Закрыта: {{ issue.resolved_at|minsk_datetime }} · Минск</p>
     {% else %}
       <p class="muted">Опишите конкретное действие, которое помогло сотруднику.</p>
       <form class="form" method="post" action="/issues/{{ issue.id }}/resolve">

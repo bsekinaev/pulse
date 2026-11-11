@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -16,15 +16,27 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.db import Base, make_session_factory
+from app.schema import require_current_schema
 from app.models import CheckIn, Employee, Issue
 from app.services.onboarding import (
     CATEGORY_NAMES, InvalidAnswers, AlreadyResolved,
     dashboard_counts, resolve_issue, submit_checkin,
 )
 from scripts.seed_demo import seed_demo
+from app.services.filters import filter_employees
+from app.services.metrics import (
+    format_minsk, is_issue_overdue, minsk_today,
+    operational_metrics, resolution_label,
+)
+from app.security import (
+    blocked_seconds, client_source, create_admin_session, register_failed_login,
+    reset_failed_logins, revoke_admin_session, source_digest, valid_admin_session,
+    parse_trusted_proxy_hosts,
+)
 
 ROOT = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
+templates.env.filters["minsk_datetime"] = format_minsk
 
 
 def create_app(
@@ -38,6 +50,10 @@ def create_app(
     secret = secret_key or os.getenv("APP_SECRET_KEY") or "local-dev-secret-not-for-production"
     password = admin_password or os.getenv("ADMIN_PASSWORD") or "local-dev-admin"
     username = os.getenv("ADMIN_USERNAME", "admin")
+    # Доверяем только конкретному Caddy, а не всей общей Docker-подсети.
+    trusted_proxies = parse_trusted_proxy_hosts(
+        os.getenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+    )
     if production and (len(secret) < 32 or len(password) < 12):
         raise RuntimeError("Для production задайте APP_SECRET_KEY (32+) и ADMIN_PASSWORD (12+)")
 
@@ -55,7 +71,11 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        Base.metadata.create_all(engine)
+        if production:
+            # Новая схема допускается только после контролируемого Alembic upgrade.
+            require_current_schema(engine)
+        else:
+            Base.metadata.create_all(engine)
         if seed:
             with session_factory() as db:
                 seed_demo(db)
@@ -72,6 +92,26 @@ def create_app(
     application.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
     application.state.sessions = session_factory
 
+    @application.middleware("http")
+    async def security_headers(request: Request, call_next):
+        """Добавляет защитные заголовки и отключает кеширование личных страниц."""
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self'; "
+            "img-src 'self' data:; object-src 'none'; base-uri 'self'; "
+            "frame-ancestors 'none'; form-action 'self'"
+        )
+        if request.url.path.startswith(
+            ("/login", "/dashboard", "/employees/", "/issues/", "/checkin/")
+        ):
+            response.headers["Cache-Control"] = "no-store"
+        if production:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        return response
+
     def get_db():
         with session_factory() as db:
             yield db
@@ -86,8 +126,8 @@ def create_app(
         if not actual or not hmac.compare_digest(actual, provided):
             raise HTTPException(status_code=403, detail="Проверка формы не пройдена")
 
-    def require_admin(request: Request):
-        if request.session.get("admin") is not True:
+    def require_admin(request: Request, db: Session = Depends(get_db)):
+        if not valid_admin_session(db, request.session):
             raise HTTPException(status_code=401, detail="Требуется вход администратора")
 
     def token_employee(token: str, db: Session) -> Employee:
@@ -104,8 +144,8 @@ def create_app(
         return employee
 
     @application.get("/")
-    def index(request: Request):
-        target = "/dashboard" if request.session.get("admin") else "/login"
+    def index(request: Request, db: Session = Depends(get_db)):
+        target = "/dashboard" if valid_admin_session(db, request.session) else "/login"
         return RedirectResponse(target, status_code=303)
 
     @application.get("/health")
@@ -122,21 +162,41 @@ def create_app(
     def login(
         request: Request, username_input: str = Form(alias="username"),
         password_input: str = Form(alias="password"), csrf: str = Form(),
+        db: Session = Depends(get_db),
     ):
         check_csrf(request, csrf)
-        valid = hmac.compare_digest(username_input, username) and hmac.compare_digest(password_input, password)
-        if not valid:
+        source = client_source(request, trusted_proxies)
+        key = source_digest(source, secret)
+        wait_seconds = blocked_seconds(db, key)
+        if wait_seconds:
+            return HTMLResponse(
+                "Слишком много попыток входа. Повторите позже.",
+                status_code=429, headers={"Retry-After": str(wait_seconds)},
+            )
+
+        # Оба сравнения выполняются независимо от правильности логина.
+        valid_username = hmac.compare_digest(username_input, username)
+        valid_password = hmac.compare_digest(password_input, password)
+        if not (valid_username & valid_password):
+            register_failed_login(db, key)
             return templates.TemplateResponse(request, "login.html", {
                 "csrf": ensure_csrf(request), "error": "Неверный логин или пароль",
             }, status_code=401)
+        reset_failed_logins(db, key)
+        session_token = create_admin_session(db)
         request.session.clear()
         request.session["admin"] = True
+        request.session["sid"] = session_token
         request.session["csrf"] = secrets.token_urlsafe(24)
         return RedirectResponse("/dashboard", status_code=303)
 
     @application.post("/logout")
-    def logout(request: Request, csrf: str = Form(), _: None = Depends(require_admin)):
+    def logout(
+        request: Request, csrf: str = Form(),
+        db: Session = Depends(get_db), _: None = Depends(require_admin),
+    ):
         check_csrf(request, csrf)
+        revoke_admin_session(db, request.session)
         request.session.clear()
         return RedirectResponse("/login", status_code=303)
 
@@ -149,10 +209,26 @@ def create_app(
         for issue in issues:
             open_counts[issue.employee_id] = open_counts.get(issue.employee_id, 0) + 1
         people.sort(key=lambda person: (-open_counts.get(person.id, 0), person.name))
+        today = minsk_today()
+        departments = sorted({person.department for person in people})
+        query = request.query_params.get("q", "").strip()[:80]
+        department = request.query_params.get("department", "").strip()[:40]
+        state = request.query_params.get("status", "all")
+        if state not in ("all", "needs_help", "answered", "awaiting", "not_due"):
+            state = "all"
+        filtered = filter_employees(
+            people, checkins, open_counts, today,
+            query=query, department=department, state=state,
+        )
+        metrics = operational_metrics(db)
         return templates.TemplateResponse(request, "dashboard.html", {
-            "people": people, "checkins": checkins, "open_counts": open_counts,
+            "people": filtered, "checkins": checkins, "open_counts": open_counts,
             "issues": issues, "counts": dashboard_counts(db), "csrf": ensure_csrf(request),
-            "today": date.today(), "category_names": CATEGORY_NAMES,
+            "today": today, "category_names": CATEGORY_NAMES,
+            "metrics": metrics, "total_people": len(people),
+            "departments": departments, "query": query, "department": department,
+            "selected_status": state,
+            "resolution_label": resolution_label(metrics["average_resolution_minutes"]),
         })
 
     @application.get("/employees/{employee_id}")
@@ -165,12 +241,15 @@ def create_app(
             raise HTTPException(status_code=404, detail="Сотрудник не найден")
         checkin = db.scalar(select(CheckIn).where(CheckIn.employee_id == employee_id))
         issues = db.scalars(select(Issue).where(Issue.employee_id == employee_id)).all()
+        issues.sort(key=lambda item: item.created_at, reverse=True)
         token = signer.dumps({"employee_id": employee.id, "day": 3})
         return templates.TemplateResponse(request, "employee.html", {
             "employee": employee, "checkin": checkin, "issues": issues,
             "checkin_url": (f"{public_base_url}/checkin/{token}" if public_base_url
                             else str(request.url_for("checkin_form", token=token))),
-            "day": max(1, (date.today() - employee.start_date).days + 1),
+            "day": max(1, (minsk_today() - employee.start_date).days + 1),
+            "open_issues": sum(1 for item in issues if item.status == "open"),
+            "resolved_issues": sum(1 for item in issues if item.status == "resolved"),
             "category_names": CATEGORY_NAMES, "csrf": ensure_csrf(request),
         })
 
@@ -225,6 +304,7 @@ def create_app(
         return templates.TemplateResponse(request, "issue.html", {
             "issue": issue, "category_names": CATEGORY_NAMES,
             "csrf": ensure_csrf(request), "error": None,
+            "overdue": is_issue_overdue(issue),
         })
 
     @application.post("/issues/{issue_id}/resolve")
@@ -243,6 +323,7 @@ def create_app(
             return templates.TemplateResponse(request, "issue.html", {
                 "issue": issue, "category_names": CATEGORY_NAMES,
                 "csrf": ensure_csrf(request), "error": str(exc),
+                "overdue": is_issue_overdue(issue),
             }, status_code=409 if isinstance(exc, AlreadyResolved) else 422)
         return RedirectResponse(f"/issues/{issue_id}", status_code=303)
 

@@ -53,3 +53,25 @@ class Issue(Base):
     resolution: Mapped[str | None] = mapped_column(Text, nullable=True)
     checkin: Mapped[CheckIn] = relationship(back_populates="issues")
     employee: Mapped[Employee] = relationship()
+
+class LoginFailure(Base):
+    """Неудачная попытка входа без хранения пользовательского IP."""
+
+    __tablename__ = "login_failures"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_hash: Mapped[str] = mapped_column(String(64), index=True)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class AdminSession(Base):
+    """Серверная административная сессия с возможностью отзыва."""
+
+    __tablename__ = "admin_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
