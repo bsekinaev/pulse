@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Панель{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">Обзор компании</span><h1>Первые дни под контролем</h1>
+    <p class="muted">Сигналы новичков, требующие внимания прямо сейчас.</p></div>
+  <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="ghost" type="submit">Выйти</button></form>
+</div>
+<section class="metrics" aria-label="Показатели адаптации">
+  <article class="metric"><span>В адаптации</span><strong>{{ counts.total }}</strong><small>сотрудников</small></article>
+  <article class="metric alert"><span>Открытые проблемы</span><strong>{{ counts.open }}</strong><small>ожидают решения</small></article>
+  <article class="metric"><span>Без ответа</span><strong>{{ counts.no_answer }}</strong><small>ждём обратную связь</small></article>
+  <article class="metric"><span>Решено</span><strong>{{ counts.resolved }}</strong><small>зафиксированные решения</small></article>
+</section>
+<section class="panel">
+  <div class="section-head"><div><h2>Новички</h2><p class="muted">Сначала сотрудники, которым нужна помощь</p></div><span class="count">{{ people|length }} человек</span></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Сотрудник</th><th>Подразделение</th><th>День</th><th>Состояние</th><th></th></tr></thead>
+    <tbody>{% for person in people %}
+      {% set opened = open_counts.get(person.id, 0) %}
+      <tr><td><strong>{{ person.name }}</strong><small>{{ person.position }}</small></td>
+      <td>{{ person.department }}</td><td>{{ (today - person.start_date).days + 1 }}</td>
+      <td>{% if opened %}<span class="pill danger">Нужна помощь · {{ opened }}</span>
+      {% elif person.id in checkins %}<span class="pill success">Анкета получена</span>
+      {% else %}<span class="pill muted-pill">Нет ответа</span>{% endif %}</td>
+      <td><a class="action-link" href="/employees/{{ person.id }}">Открыть →</a></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+<section class="panel">
+  <div class="section-head"><div><h2>Проблемы в работе</h2><p class="muted">Каждое обращение имеет ответственного</p></div></div>
+  {% if issues %}<div class="issue-list">{% for issue in issues %}
+    <a class="issue-item" href="/issues/{{ issue.id }}">
+      <span class="issue-dot"></span><span class="issue-content"><strong>{{ category_names[issue.category] }}</strong>
+        <small>{{ issue.employee.name }} · {{ issue.employee.department }} · Ответственный: {{ issue.owner_name }}</small></span>
+      <span class="action-link">Решить →</span>
+    </a>
+  {% endfor %}</div>{% else %}<p class="empty">Все зарегистрированные проблемы закрыты.</p>{% endif %}
+</section>
+{% endblock %}

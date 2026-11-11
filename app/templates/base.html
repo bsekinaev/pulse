@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#153554">
+  <title>{% block title %}ПУЛЬС{% endblock %} — адаптация сотрудников</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+</head>
+<body>
+  <header class="topbar"><div class="container topbar-inner">
+    <a class="brand" href="/"><span class="brand-symbol">◉</span> ПУЛЬС <span class="brand-suffix">/ адаптация</span></a>
+    <span class="demo">ДЕМО · СИНТЕТИЧЕСКИЕ ДАННЫЕ</span>
+  </div></header>
+  <main class="container">{% block content %}{% endblock %}</main>
+  <footer class="footer container">ПУЛЬС · Прототип для ТГТ · Все сотрудники вымышлены</footer>
+</body>
+</html>

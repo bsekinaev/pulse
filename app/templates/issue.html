@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Проблема №{{ issue.id }}{% endblock %}
+{% block content %}
+<p><a class="back" href="/dashboard">← К панели</a></p>
+<div class="page-head"><div><span class="eyebrow">Проблема №{{ issue.id }}</span><h1>{{ category_names[issue.category] }}</h1><p class="muted">{{ issue.employee.name }} · {{ issue.employee.department }}</p></div>
+<span class="pill {% if issue.status == 'resolved' %}success{% else %}danger{% endif %}">{{ 'Решено' if issue.status == 'resolved' else 'Открыта' }}</span></div>
+<div class="detail-grid">
+  <section class="panel"><h2>Контекст обращения</h2>
+    <dl class="details"><dt>Сотрудник</dt><dd>{{ issue.employee.name }}</dd>
+    <dt>Подразделение</dt><dd>{{ issue.employee.department }}</dd>
+    <dt>Ответственный</dt><dd>{{ issue.owner_name }}</dd>
+    <dt>Создана</dt><dd>{{ issue.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</dd></dl>
+    <h3>Комментарий новичка</h3><div class="quote">{{ issue.checkin.comment or 'Дополнительный комментарий отсутствует.' }}</div>
+  </section>
+  <section class="panel"><h2>Результат работы</h2>
+    {% if issue.status == 'resolved' %}
+      <div class="notice success-notice">Проблема закрыта</div>
+      <p>{{ issue.resolution }}</p><p class="muted">Закрыта: {{ issue.resolved_at.strftime('%d.%m.%Y %H:%M') }} UTC</p>
+    {% else %}
+      <p class="muted">Опишите конкретное действие, которое помогло сотруднику.</p>
+      <form class="form" method="post" action="/issues/{{ issue.id }}/resolve">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        {% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
+        <label>Что было сделано?<textarea name="resolution" rows="5" minlength="5" maxlength="500" required placeholder="Например: терминал выдан, доступ проверен"></textarea></label>
+        <button type="submit">Зафиксировать решение</button>
+      </form>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

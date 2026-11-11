@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Анкета новичка{% endblock %}
+{% block content %}
+<section class="checkin">
+  <span class="eyebrow">ПУЛЬС · День 3</span>
+  <h1>{{ employee.name.split(' ')[0] }}, как проходит работа?</h1>
+  <p class="muted">Три коротких ответа помогут наставнику быстрее решить вопросы. Заполнение займёт около минуты.</p>
+  <form class="panel form" method="post" action="/checkin/{{ token }}">
+    {% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
+    {% set questions = [('equipment', 'Есть всё необходимое для работы?'), ('instructions', 'Понятны ли твои рабочие задачи?'), ('support', 'Знаешь ли ты, к кому обратиться за помощью?')] %}
+    {% for key, question in questions %}
+      <fieldset><legend><span class="question-number">0{{ loop.index }}</span>{{ question }}</legend>
+        <div class="options"><label><input type="radio" name="{{ key }}" value="yes" required> Да, всё хорошо</label>
+        <label><input type="radio" name="{{ key }}" value="no" required> Нет, нужна помощь</label></div>
+      </fieldset>
+    {% endfor %}
+    <label>Что мешает работе? <span class="muted">(необязательно)</span>
+      <textarea name="comment" maxlength="500" rows="3" placeholder="Например: не выдали терминал для склада"></textarea>
+    </label>
+    <button type="submit">Отправить ответы →</button>
+    <p class="fine">Мы передадим информацию ответственному. Ответы сохраняются один раз.</p>
+  </form>
+</section>
+{% endblock %}

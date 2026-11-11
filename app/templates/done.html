@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Ответ получен{% endblock %}
+{% block content %}
+<section class="success-screen panel"><div class="success-icon">✓</div>
+<h1>Спасибо, ответ получен!</h1>
+<p>Информация сохранена. Если ты сообщил о трудности, она появится у ответственного.</p>
+<p class="muted">Твой наставник: {{ employee.mentor_name }}</p>
+</section>
+{% endblock %}
